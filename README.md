@@ -1,109 +1,129 @@
-# MCP Server Template
+# MCP Auth Demo — Vertragsinformationen per PIN
 
-Template for building [Model Context Protocol](https://modelcontextprotocol.io/) servers with NestJS, deployable to Google Cloud Run.
+MCP Server mit PIN-Authentifizierung für Vertragsdaten. Gedacht als Demo für Voice-Assistants die über das Model Context Protocol Kundendaten abfragen.
+
+## Architektur
+
+```
+Voice-Assistant
+      │
+      ▼
+MCP Server (NestJS, :8088)     ──REST──►     Mock Auth Service (Express, :3001)
+   /mcp                                       POST /auth/verify-pin
+   Tools:                                     GET  /contracts
+   • authenticate(code)                       GET  /contracts/:id
+   • get-contracts()
+   • get-contract-details(contractId)
+```
+
+Der MCP Server stellt drei Tools bereit. Der Mock Auth Service simuliert eine externe API mit PIN-Validierung und JWT-Token-Rückgabe.
 
 ## Quick Start
 
 ```bash
 npm install
 cp .env.example .env
+```
+
+### Lokal starten
+
+In zwei separaten Terminals:
+
+```bash
+# Terminal 1: Mock Auth Service
+npm run start:mock
+
+# Terminal 2: MCP Server
 npm run start:dev
 ```
 
-The server starts on `http://localhost:8088`:
+Der MCP Server läuft auf `http://localhost:8088/mcp`, der Mock Service auf `http://localhost:3001`.
 
-- **MCP endpoint:** `POST /mcp`
-- **Health check:** `GET /health`
+### Mit Tunnel ins Internet
 
-## Project Structure
+Damit ein externer Voice-Assistant die Services erreichen kann:
+
+```bash
+# Voraussetzung: cloudflared installieren (einmalig)
+brew install cloudflared
+
+# Beide Services + Tunnel starten
+./start-tunnel.sh
+```
+
+Das Script startet Mock Service, MCP Server und je einen Cloudflare-Tunnel. Am Ende werden die öffentlichen URLs angezeigt. Die MCP-Endpoint-URL wird dem Voice-Assistant übergeben. Stoppen mit `Ctrl+C`.
+
+## Projekt-Struktur
 
 ```
 src/
-├── main.ts              # Server bootstrap
-├── app.module.ts        # Module & tool registration
-├── api-key.guard.ts     # Optional API key auth
-├── health.controller.ts # Health check endpoint
+├── main.ts                 # NestJS Bootstrap
+├── app.module.ts           # Modul-Konfiguration
+├── api-key.guard.ts        # Bearer Token Auth für /mcp
+├── health.controller.ts    # GET /health
+├── mock-service/
+│   ├── data.ts             # Mock-Kunden und Vertragsdaten
+│   └── server.ts           # Express REST API (eigenständig)
 └── tools/
-    └── example.tool.ts  # Example: REST API tool (list + create)
+    ├── auth.tool.ts        # MCP Tool: authenticate (mit Spracherkennung)
+    └── contract.tool.ts    # MCP Tools: get-contracts, get-contract-details
 ```
 
-## Creating a Tool
+## Auth-Flow
 
-1. Create a file in `src/tools/`:
+1. Voice-Assistant ruft `authenticate(code: "eins zwei drei vier")` auf
+2. MCP Server konvertiert gesprochene Zahlen zu Ziffern (`"1234"`)
+3. MCP Server sendet PIN an Mock Service (`POST /auth/verify-pin`)
+4. Mock Service validiert PIN und gibt JWT-Token zurück
+5. MCP Server speichert Token für nachfolgende Requests
+6. Vertragsdaten-Tools nutzen das Token für autorisierte Requests an den Mock Service
 
-```typescript
-import { Injectable, Logger } from "@nestjs/common";
-import { Tool, Context } from "@rekog/mcp-nest";
-import z from "zod";
+## Konfiguration
 
-@Injectable()
-export class MyTool {
-  private readonly logger = new Logger(MyTool.name);
+Alle Einstellungen über `.env` (siehe `.env.example`):
 
-  @Tool({
-    name: "my-tool",
-    description: "What this tool does",
-    parameters: z.object({
-      input: z.string().describe("What this parameter is for"),
-    }),
-  })
-  async run({ input }: { input: string }, _context: Context) {
-    this.logger.log(`Called with: ${input}`);
-    return "result";
-  }
-}
-```
-
-2. Register in `app.module.ts`:
-
-```typescript
-import { MyTool } from "./tools/my.tool";
-
-providers: [
-  // ...
-  MyTool,
-],
-```
-
-Done — the tool is available via MCP.
-
-**How to organize tools:** Group related operations in one file per domain/API. A single class can have multiple `@Tool()` methods that share the same HTTP client and config. Create separate files for unrelated domains:
-
-```
-src/tools/
-├── jira.tool.ts       ← all Jira operations (list, create, update)
-├── calendar.tool.ts   ← all calendar operations
-└── slack.tool.ts      ← all Slack operations
-```
-
-## Configuration
-
-All settings via environment variables (see `.env.example`):
-
-| Variable | Default | Description |
+| Variable | Default | Beschreibung |
 |---|---|---|
-| `MCP_SERVER_NAME` | `my-mcp-server` | Server name in MCP handshake |
-| `MCP_SERVER_VERSION` | `1.0.0` | Server version |
-| `PORT` | `8088` | HTTP port |
-| `API_KEY` | _(empty)_ | Protect `/mcp` endpoint (empty = open) |
-| `CORS_ORIGIN` | `*` | Allowed CORS origin |
+| `MCP_SERVER_NAME` | `contract-auth-service` | Server-Name im MCP Handshake |
+| `MCP_SERVER_VERSION` | `1.0.0` | Server-Version |
+| `PORT` | `8088` | HTTP Port des MCP Servers |
+| `AUTH_BEARER_TOKEN` | _(leer)_ | Bearer Token für `/mcp` Endpoint (leer = offen) |
+| `CORS_ORIGIN` | `*` | Erlaubte CORS Origin |
+| `MOCK_SERVICE_PORT` | `3001` | Port des Mock Auth Service |
+| `MOCK_SERVICE_URL` | `http://localhost:3001` | URL des Mock Auth Service |
 
-## Docker & Cloud Run
+## Test-Daten
+
+| Kunde | PIN | Verträge |
+|---|---|---|
+| Max Mustermann | 1234 | Allnet Flat L, Data Only M |
+| Erika Musterfrau | 5678 | Allnet Flat S (expired), Allnet Flat XL |
+| Hans Beispiel | 9999 | Prepaid Basic |
+
+## Manuell testen
 
 ```bash
-# Local Docker
-./start.sh
+# MCP Session starten
+curl -X POST http://localhost:8088/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}'
 
-# Deploy to Cloud Run
-gcloud builds submit --tag gcr.io/PROJECT_ID/my-mcp-server
+# Authentifizieren
+curl -X POST http://localhost:8088/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"authenticate","arguments":{"code":"1234"}}}'
 
-gcloud run deploy my-mcp-server \
-  --image gcr.io/PROJECT_ID/my-mcp-server \
-  --region europe-west3 \
-  --port 8088 \
-  --set-env-vars "MCP_SERVER_NAME=my-mcp-server"
+# Verträge abrufen
+curl -X POST http://localhost:8088/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get-contracts","arguments":{}}}'
 ```
 
-## License
+## Docker
 
-MIT
+```bash
+./start.sh
+```
