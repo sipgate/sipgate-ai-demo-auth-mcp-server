@@ -11,19 +11,25 @@ export class ApiKeyGuard implements CanActivate {
   private readonly logger = new Logger(ApiKeyGuard.name);
 
   canActivate(context: ExecutionContext): boolean {
-    const expectedKey = process.env.API_KEY;
+    const expectedToken = process.env.AUTH_BEARER_TOKEN;
 
-    if (!expectedKey) {
+    if (!expectedToken) {
       return true;
     }
 
     const request = context.switchToHttp().getRequest();
-    const providedKey =
-      request.headers["x-api-key"] ?? request.query?.api_key;
+    const authHeader = request.headers["authorization"];
 
-    if (!providedKey || providedKey !== expectedKey) {
-      this.logger.warn(`Unauthorized request from ${request.ip}`);
-      throw new UnauthorizedException("Invalid or missing API key");
+    if (!authHeader?.startsWith("Bearer ")) {
+      this.logger.warn(`Missing Bearer token from ${request.ip}`);
+      throw new UnauthorizedException("Bearer token required");
+    }
+
+    const token = authHeader.slice(7);
+
+    if (token !== expectedToken) {
+      this.logger.warn(`Invalid Bearer token from ${request.ip}`);
+      throw new UnauthorizedException("Invalid Bearer token");
     }
 
     return true;
