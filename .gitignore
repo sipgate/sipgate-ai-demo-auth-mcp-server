@@ -1,0 +1,17 @@
+# Node
+node_modules/
+dist/
+.env
+*.log
+
+# TypeScript
+*.tsbuildinfo
+
+# Mac
+.DS_Store
+
+# VSCode
+.vscode/
+
+# Others
+coverage/
