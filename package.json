@@ -13,7 +13,7 @@
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",
     "@nestjs/common": "^11.1.8",
-    "@nestjs/core": "^11.1.8",
+    "@nestjs/core": "^11.1.18",
     "@nestjs/platform-express": "^11.1.8",
     "@rekog/mcp-nest": "^1.8.4",
     "axios": "^1.13.2",
