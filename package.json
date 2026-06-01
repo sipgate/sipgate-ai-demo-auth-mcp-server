@@ -8,7 +8,8 @@
     "start:dev": "nest start --watch",
     "start:mock": "ts-node src/mock-service/server.ts",
     "build": "nest build",
-    "lint": "eslint \"src/**/*.ts\""
+    "lint": "eslint \"src/**/*.ts\"",
+    "start:tunnel": "bash start-tunnel.sh"
   },
   "dependencies": {
     "@cfworker/json-schema": "^4.1.1",

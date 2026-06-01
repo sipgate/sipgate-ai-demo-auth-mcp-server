@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { Tool, Context } from "@rekog/mcp-nest";
+import { Context, Tool } from "@rekog/mcp-nest";
 import axios from "axios";
 import z from "zod";
 
@@ -56,9 +56,14 @@ function normalizePin(input: string): string {
 export class AuthTool {
   private readonly logger = new Logger(AuthTool.name);
   private token: string | null = null;
+  private callerNumber: string | null = null;
 
   getToken(): string | null {
     return this.token;
+  }
+
+  getCallerNumber(): string | null {
+    return this.callerNumber;
   }
 
   @Tool({
@@ -68,14 +73,33 @@ export class AuthTool {
     parameters: z.object({
       code: z
         .string()
+        .describe("The customer's PIN code, either as digits or spoken words"),
+      sessionId: z
+        .string()
         .describe(
-          "The customer's PIN code, either as digits or spoken words",
+          "The sessionId from the conversation context (contextInfo). Pass the value exactly as stated in the context. ",
+        ),
+      callerNumber: z
+        .string()
+        .optional()
+        .describe(
+          "The phone number of the calling party in E.164 format (e.g. '+4921112345678'). Must start with '+' followed by country code and subscriber number, no spaces or separators.",
         ),
     }),
   })
-  async authenticate({ code }: { code: string }, _context: Context) {
+  async authenticate(
+    {
+      code,
+      callerNumber,
+      sessionId,
+    }: { code: string; callerNumber?: string; sessionId: string },
+    _context: Context,
+  ) {
     const pin = normalizePin(code);
-    this.logger.log(`Authentication attempt (raw: "${code}", normalized: "${pin}")`);
+    this.callerNumber = callerNumber ?? null;
+    this.logger.log(
+      `Authentication attempt (sessionId: "${sessionId}", raw: "${code}", normalized: "${pin}", callerNumber: "${callerNumber ?? "unknown"}")`,
+    );
 
     try {
       const response = await axios.post(`${MOCK_SERVICE_URL}/auth/verify-pin`, {

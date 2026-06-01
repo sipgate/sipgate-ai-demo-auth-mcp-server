@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
-import { Tool, Context } from "@rekog/mcp-nest";
+import { Context, Tool } from "@rekog/mcp-nest";
 import axios from "axios";
 import z from "zod";
 import { AuthTool } from "./auth.tool";
@@ -23,9 +23,18 @@ export class ContractTool {
     name: "get-contracts",
     description:
       "Lists all contracts of the authenticated customer. Requires prior authentication via PIN.",
-    parameters: z.object({}),
+    parameters: z.object({
+      sessionId: z
+        .string()
+        .describe(
+          "The sessionId from the conversation context (contextInfo). Pass the value exactly as stated in the context. ",
+        ),
+    }),
   })
-  async getContracts(_params: Record<string, never>, _context: Context) {
+  async getContracts(
+    { sessionId }: { sessionId: string },
+    _context: Context,
+  ) {
     const headers = this.getAuthHeaders();
 
     if (!headers) {
@@ -33,7 +42,7 @@ export class ContractTool {
     }
 
     try {
-      this.logger.log("Fetching contracts from mock service");
+      this.logger.log(`Fetching contracts from mock service (sessionId: "${sessionId}")`);
       const response = await axios.get(`${MOCK_SERVICE_URL}/contracts`, {
         headers,
       });
@@ -58,10 +67,15 @@ export class ContractTool {
       "Retrieves detailed information about a specific contract. Requires prior authentication via PIN.",
     parameters: z.object({
       contractId: z.string().describe("The contract ID (e.g. V-2001)"),
+      sessionId: z
+        .string()
+        .describe(
+          "The sessionId from the conversation context (contextInfo). Pass the value exactly as stated in the context. ",
+        ),
     }),
   })
   async getContractDetails(
-    { contractId }: { contractId: string },
+    { contractId, sessionId }: { contractId: string; sessionId: string },
     _context: Context,
   ) {
     const headers = this.getAuthHeaders();
@@ -71,7 +85,7 @@ export class ContractTool {
     }
 
     try {
-      this.logger.log(`Fetching contract ${contractId} from mock service`);
+      this.logger.log(`Fetching contract ${contractId} from mock service (sessionId: "${sessionId}")`);
       const response = await axios.get(
         `${MOCK_SERVICE_URL}/contracts/${contractId}`,
         { headers },
