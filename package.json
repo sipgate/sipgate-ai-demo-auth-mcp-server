@@ -17,7 +17,7 @@
     "@nestjs/core": "^11.1.8",
     "@nestjs/platform-express": "^11.1.8",
     "@rekog/mcp-nest": "^1.8.4",
-    "axios": "^1.13.2",
+    "axios": "^1.20.0",
     "jsonwebtoken": "^9.0.2",
     "zod": "^3.25.76"
   },
